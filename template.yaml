@@ -16,48 +16,106 @@ Parameters:
 
 Resources:
 
-  DataApiAccessLog:
-    Type: AWS::Logs::LogGroup
+  DB:
+    DeletionPolicy: Retain
+    Type: AWS::DynamoDB::Table
     Properties:
-      RetentionInDays: 1
+      BillingMode: PAY_PER_REQUEST
+      TableName: VendiaDB
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: sk_n
+          AttributeType: N
+        - AttributeName: gsi
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      LocalSecondaryIndexes:
+        - IndexName: lsi
+          KeySchema:
+            - AttributeName: pk
+              KeyType: HASH
+            - AttributeName: sk_n
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      GlobalSecondaryIndexes:
+      - IndexName: gsi
+        KeySchema:
+            - AttributeName: gsi
+              KeyType: HASH
+        Projection:
+            ProjectionType: ALL
 
 
-  DataApi: 
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      AccessLogSettings:
-        DestinationArn: !GetAtt DataApiAccessLog.Arn
-        Format: $context.identity.sourceIp - - [$context.requestTime] "$context.httpMethod $context.path $context.routeKey $context.protocol" $context.status $context.responseLength $context.requestId $context.authorizer.error $context.error.messageString $context.integration.error
-      Auth:
-        Authorizers:
-          CognitoAuthorizer:
-            JwtConfiguration:
-              audience:
-                - !Ref UserPoolClient
-              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
-            IdentitySource: $request.header.Authorization
-          
+
+  ApiGatewayApi:
+      Type: AWS::Serverless::Api
+      Properties:
+        StageName: 'prod'
+        Auth:
+          DefaultAuthorizer: CognitoAuthorizer
+          Authorizers:
+            CognitoAuthorizer:
+              UserPoolArn: !GetAtt UserPool.Arn
+              UserPoolClientId: !Ref UserPoolClient
+              UserPoolDomain: !GetAtt UserPool.Domain
+
+
   BalancesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/get-all-items.getAllItemsHandler
+      Handler: src/handlers/balance.balanceHandler
       Runtime: nodejs20.x
       MemorySize: 512
-      Timeout: 100
-      # Policies:
-        # Give Create/Read/Update/Delete Permissions to the SampleTable
-      # - DynamoDBCrudPolicy:
-      #     TableName: !Ref SampleTable
+      Timeout: 30
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the DB
+      - DynamoDBCrudPolicy:
+          TableName: !Ref DB
       Environment:
         Variables:
-          Table: "sadf"
+          DB: !Ref DB
       Events:
         Api:
-          Type: HttpApi
+          Type: Api
           Properties:
-            ApiId: !Ref DataApi
-            Path: /
+            RestApiId: !Ref ApiGatewayApi
+            Path: /balance/{account_name}
             Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  TransfersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/transfer.transferHandler
+      Runtime: nodejs20.x
+      MemorySize: 512
+      Timeout: 30
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the DB
+      - DynamoDBCrudPolicy:
+          TableName: !Ref DB
+      Environment:
+        Variables:
+          DB: !Ref DB
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGatewayApi
+            Path: /transfer
+            Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
 
@@ -96,6 +154,10 @@ Resources:
         - AttributeDataType: String
           Name: email
           Required: false
+        - AttributeDataType: String
+          Name: "username"
+          Mutable: false
+          Required: false
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -111,11 +173,14 @@ Resources:
 Outputs:
   ApiUrl:
     Description: URL for application
-    Value: !Sub 'https://${DataApi}.execute-api.${AWS::Region}.amazonaws.com/'
+    Value: !Sub 'https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
   UserPool:
     Description: Cognito User Pool Id
     Value: !Ref UserPool
   UserPoolClient:
     Description: Cognito User Pool Client
     Value: !Ref UserPoolClient
+  DB:
+    Description: DynamoDB Table Name
+    Value: !Ref DB
     

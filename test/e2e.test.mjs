@@ -1,9 +1,13 @@
 import { CloudFormationClient, DescribeStacksCommand } from "@aws-sdk/client-cloudformation"; // ES Modules import
 import { AdminCreateUserCommand, AdminDeleteUserCommand,  AdminSetUserPasswordCommand,  CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
-import axios from "axios";
 
-import { matchers } from 'jest-json-schema';
-expect.extend(matchers);
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+const client = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(client);
+
+
+import axios from "axios";
 
 const cloudformation = new CloudFormationClient({
   region: process.env.AWS_REGION || "us-east-2",
@@ -15,18 +19,103 @@ const cognito = new CognitoIdentityProviderClient({
 let stack;
 
 const USERS = [{
-  username: 'test-user@test.com',
+  username: 'test_user@test.com',
   password: '12345678',
 }, {
-  username: 'test-user2@test.com',
+  username: 'test_user2@test.com',
   password: '434234234',
 }]
+
+const ACCOUNTS = [
+  { 
+    id: 'opex1',
+    name: 'opex',
+    balance: 100,
+    partners: ['test_user@test.com']
+  },
+  { 
+    id: 'savings1',
+    name: 'savings',
+    balance: 100,
+    partners: ['test_user@test.com']
+  },
+  { 
+    id: 'payroll1',
+    name: 'payroll',
+    balance: 100,
+    partners: ['test_user@test.com']
+  },
+  { 
+    id: 'opex2',
+    name: 'opex',
+    balance: 0,
+    partners: ['test_user2@test.com']
+  },
+  { 
+    id: 'savings2',
+    name: 'savings',
+    balance: 0,
+    partners: ['test_user2@test.com']
+  },
+  { 
+    id: 'payroll2',
+    name: 'payroll',
+    balance: 0,
+    partners: ['test_user2@test.com']
+  },
+]
+
 /*
   1. get stack outputs with cloudformation
   2. setup user accounts for the test
+  3. init account balances
 */
+
+const reset_accounts = async () => {
+    // init account balances and partner records in dynamodb
+
+    let init_accounts = ACCOUNTS.map(async (account) => {
+
+      let account_record = {
+        pk: account.id,
+        sk: account.id,
+        name: account.name,
+        balance: account.balance,
+        last_modified: new Date().toISOString()
+      }
+
+      await docClient.send(new PutCommand({
+        TableName: stack.DB,
+        Item: account_record,
+      }))
+      
+      let partner_records = account.partners.map(async (partner) => {
+        let partner_record = {
+            pk: partner,
+            sk: account.id,
+            account_id: account.id,
+            account_name: account.name,
+            role: 'owner'
+        }
+        
+        await docClient.send(new PutCommand({
+          TableName: stack.DB,
+          Item: partner_record,
+        }))
+      })
+
+      await Promise.all(partner_records)
+    })
+
+
+
+    await Promise.all(init_accounts)
+
+}
+
+
+
 beforeAll(async () => {
-  console.log('1 - beforeAll')
   // get stack output with cloudformation
   let res = await cloudformation.send(new DescribeStacksCommand( { // DescribeStacksInput
     StackName: "vendia-assessment",
@@ -44,14 +133,19 @@ beforeAll(async () => {
         UserPoolId: stack.UserPool,
         Username: user.username,
         TemporaryPassword: user.password,
+        MessageAction:"SUPPRESS",
         UserAttributes: [
           {
             Name: 'email',
             Value: user.username
           },
           {
+            Name: "custom:username",
+            Value: user.username
+          },
+          {
             Name: 'email_verified',
-            Value: 'true'
+            Value: 'false'
           }
         ]
       }))
@@ -67,7 +161,8 @@ beforeAll(async () => {
   
   await Promise.all(init_test_users)
 
-
+  // init account balances
+  await reset_accounts()
 
 });
 
@@ -75,17 +170,45 @@ beforeAll(async () => {
 
 
 
-afterAll(() => {
+afterAll(async () => {
   // delete users with cognito
-  let delete_test_users = ['test-user@test.com', 'test-user2@test.com'].map(async (username) => {
+  let delete_test_users = USERS.map(async (user) => {
     await cognito.send(new AdminDeleteUserCommand({
       UserPoolId: stack.UserPool,
-      Username: username
+      Username: user.username,
     }))
   })
 
   Promise.all(delete_test_users)
+
+  // reset account balances
+  await reset_accounts()
+
 });
+
+
+describe('anonymous user', () => { 
+  it('fails to call balance endpoint without token', async () => { 
+    try{
+      let r = await axios.get(stack.ApiUrl + '/balance/payroll')
+    }catch(e){
+      expect(e.response.status).toEqual(401);
+    }
+  });
+
+  it('fails to call transfers endpoint without token', async () => { 
+    try{
+      let r = await axios.post(stack.ApiUrl + '/transfer', {
+        amount: 10,
+        source_account: 'payroll',
+        destination_account: 'savings',
+        partner: 'test_user2@test.com'
+      })
+    }catch(e){
+      expect(e.response.status).toEqual(401);
+    }
+  });
+})
 
 
 describe('registered user', () => { 
@@ -109,31 +232,22 @@ describe('registered user', () => {
       expect(r.data.AuthenticationResult).toBeDefined();
       expect(r.data.AuthenticationResult.AccessToken).toBeDefined();
       token = r.data.AuthenticationResult.AccessToken
+      token = r.data.AuthenticationResult.IdToken
 
     });
 
-    it('fails to call endpoint without token', async () => { 
-      try{
-        let r = await axios.get(stack.ApiUrl + '/', {
-          headers: {
-          }
-        })
-      }catch(e){
-        expect(e.response.status).toEqual(401);
-      }
-    });
-
-    it('able to call endpoint with token', async () => { 
-      let r = await axios.get(stack.ApiUrl + '/', {
+    it('retrieves initial payroll balance', async () => { 
+      let r = await axios.get(stack.ApiUrl + '/balance/payroll', {
         headers: {
           'Authorization': token
         }
       })
       expect(r.status).toEqual(200);
-      console.log(r.data)
+      expect(r.data.name).toEqual('payroll');
+      expect(r.data.balance).toEqual(100);
     });
 
-
+    
       
 }); 
  

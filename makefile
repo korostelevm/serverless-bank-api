@@ -64,4 +64,6 @@ deploy:
 	--capabilities CAPABILITY_IAM \
 	--s3-bucket ${app_bucket} 
 
-	
+sync:
+	sam sync \
+	--stack-name ${app_name} 

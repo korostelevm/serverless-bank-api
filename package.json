@@ -17,8 +17,7 @@
         "jest-json-schema": "^6.1.0"
     },
     "scripts": {
-        "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
-        "e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testMatch='**/e2e.test.mjs'"
+        "e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js ./test/e2e.test.mjs"
     },
     "jest": {
         "testMatch": [
@@ -26,6 +25,10 @@
             "**/?(*.)+(spec|test).[jt]s?(x)",
             "**/__tests__/**/*.mjs?(x)",
             "**/?(*.)+(spec|test).mjs?(x)"
+        ],
+        "testPathIgnorePatterns": [
+            "/node_modules/",
+            "/.aws-sam/"
         ],
         "moduleFileExtensions": [
             "mjs",
