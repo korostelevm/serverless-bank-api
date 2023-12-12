@@ -6,8 +6,48 @@ import { DynamoDBDocumentClient, ScanCommand, QueryCommand, GetCommand,
     TransactWriteCommand,
     UpdateCommand
  } from '@aws-sdk/lib-dynamodb';
+ import { with_backoff } from './utils.mjs';
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
+
+const do_transfer = async (source_account, destination_account, amount) => {
+    let result = null
+    let do_transfer = await ddbDocClient.send(new TransactWriteCommand({
+        TransactItems : [
+            {
+                Update: {
+                    ConditionExpression: "balance >= :amount",
+                    TableName: process.env.DB,
+                    Key: {
+                        pk: source_account.account_id,
+                        sk: source_account.account_id
+                    },
+                    UpdateExpression: "set balance = balance - :amount",
+                    ExpressionAttributeValues: {
+                        ":amount": amount
+                    }
+                }
+            },
+            {
+                Update: {
+                    TableName: process.env.DB,
+                    Key: {
+                        pk: destination_account.account_id,
+                        sk: destination_account.account_id
+                    },
+                    UpdateExpression: "set balance = balance + :amount",
+                    ExpressionAttributeValues: {
+                        ":amount": amount
+                    }
+                }
+            }
+        ]
+        
+        
+    }))
+    return result
+}
+
 
 export const transferHandler = async (event, context) => {
 
@@ -17,8 +57,7 @@ export const transferHandler = async (event, context) => {
     const user = event.requestContext.authorizer.claims['custom:username']
     const {source_account_name, destination_account_name, amount, partner} = JSON.parse(event.body)
 
-    let error = null
-
+    let error = null;
     let accounts_queries = [
             {partner: user, account_name: source_account_name},
             {partner: partner, account_name: destination_account_name},
@@ -46,7 +85,7 @@ export const transferHandler = async (event, context) => {
     
     if(error){
         return {
-            statusCode: 200,
+            statusCode: 400,
             body: JSON.stringify({
                 accounts,
                 error
@@ -58,51 +97,26 @@ export const transferHandler = async (event, context) => {
     // transfer funds
     let source_account = accounts[0]
     let destination_account = accounts[1]
-    let result = null
-    try{
 
-        let do_transfer = await ddbDocClient.send(new TransactWriteCommand({
-            TransactItems : [
-                {
-                    Update: {
-                        ConditionExpression: "balance >= :amount",
-                        TableName: process.env.DB,
-                        Key: {
-                            pk: source_account.account_id,
-                            sk: source_account.account_id
-                        },
-                        UpdateExpression: "set balance = balance - :amount",
-                        ExpressionAttributeValues: {
-                            ":amount": amount
-                        }
-                    }
-                },
-                {
-                    Update: {
-                        TableName: process.env.DB,
-                        Key: {
-                            pk: destination_account.account_id,
-                            sk: destination_account.account_id
-                        },
-                        UpdateExpression: "set balance = balance + :amount",
-                        ExpressionAttributeValues: {
-                            ":amount": amount
-                        }
-                    }
-                }
-            ]
-            
-            
-        }))
-        result = 'success'
+    let result
+    try{
+        await with_backoff(() => do_transfer(source_account, destination_account, amount))
     }catch(e){
-        if(e.name == 'TransactionCanceledException'){
-            error = e.message
-        }else{
-            throw e
+        if(e.code == 'TransactionCanceledException'){
+            return {
+                statusCode: 423,
+                body: JSON.stringify({
+                    error: `Resource is busy, try again later`
+                })
+            }
+        }
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: `Transfer failed`
+            })
         }
     }
-
 
 
     const response = {
