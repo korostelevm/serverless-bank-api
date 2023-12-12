@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  vendia-bank
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+Resources:
+
+  DataApiAccessLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+
+
+  DataApi: 
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      AccessLogSettings:
+        DestinationArn: !GetAtt DataApiAccessLog.Arn
+        Format: $context.identity.sourceIp - - [$context.requestTime] "$context.httpMethod $context.path $context.routeKey $context.protocol" $context.status $context.responseLength $context.requestId $context.authorizer.error $context.error.messageString $context.integration.error
+
+  BalancesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/get-all-items.getAllItemsHandler
+      Runtime: nodejs20.x
+      MemorySize: 512
+      Timeout: 100
+      # Policies:
+        # Give Create/Read/Update/Delete Permissions to the SampleTable
+      # - DynamoDBCrudPolicy:
+      #     TableName: !Ref SampleTable
+      Environment:
+        Variables:
+          Table: "sadf"
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DataApi
+            Path: /
+            Method: GET
+
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Join:
+        - ''
+        - - ApplicationInsights-SAM-
+          - Ref: AWS::StackName
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Fn::Join:
+        - ''
+        - - ApplicationInsights-SAM-
+          - Ref: AWS::StackName
+      AutoConfigurationEnabled: 'true'
+    DependsOn: ApplicationResourceGroup
+
+
+Outputs:
+  ApiUrl:
+    Description: URL for application
+    Value: !Sub 'https://${DataApi}.execute-api.${AWS::Region}.amazonaws.com/'
