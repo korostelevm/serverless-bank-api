@@ -14,9 +14,11 @@ const tableName = process.env.SAMPLE_TABLE;
  */
 export const getAllItemsHandler = async (event) => {
     console.log(event)
-    if (event.httpMethod !== 'GET') {
-        throw new Error(`getAllItems only accept GET method, you tried: ${event.httpMethod}`);
-    }
+
+    
+    // if (event.httpMethod !== 'GET') {
+    //     throw new Error(`getAllItems only accept GET method, you tried: ${event.httpMethod}`);
+    // }
     // All log statements are written to CloudWatch
     // console.info('received:', event);
 
@@ -36,7 +38,14 @@ export const getAllItemsHandler = async (event) => {
 
     const response = {
         statusCode: 200,
-        body: {'message': 'Hello World'}
+        body: JSON.stringify(event),
+        headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+        }
+
     };
 
     return response;

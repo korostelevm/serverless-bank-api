@@ -1,7 +1,7 @@
 
 .SILENT:
 .PHONY: help
-app_name=venida-assessment
+app_name=vendia-assessment
 
 ## Prints this help screen
 help:
@@ -35,7 +35,20 @@ install:
 	npm install
 
 test: 
-	npm run test
+	curl -X POST \
+		-H "Content-Type: application/x-amz-json-1.1" \
+		-H "X-Amz-Target: AWSCognitoIdentityProviderService.InitiateAuth" \
+		--data '{ \
+			"AuthFlow": "USER_PASSWORD_AUTH", \
+			"ClientId": "5lui55u51lglkg53n82ehlsv2u", \
+			"AuthParameters": { \
+				"USERNAME": "korostelevm@gmail.com", \
+				"PASSWORD": "4234475a" \
+			}\
+		}' \
+		"https://cognito-idp.us-east-2.amazonaws.com/"
+
+
 
 build:
 	@sam build \

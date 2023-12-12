@@ -6,6 +6,14 @@ Description: >-
 # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
 Transform:
 - AWS::Serverless-2016-10-31
+
+Parameters:
+  CognitoUserPoolName:
+    Type: String
+    Description: The name of the Cognito User Pool to create
+    Default: vendia-bank-user-pool
+
+
 Resources:
 
   DataApiAccessLog:
@@ -20,7 +28,15 @@ Resources:
       AccessLogSettings:
         DestinationArn: !GetAtt DataApiAccessLog.Arn
         Format: $context.identity.sourceIp - - [$context.requestTime] "$context.httpMethod $context.path $context.routeKey $context.protocol" $context.status $context.responseLength $context.requestId $context.authorizer.error $context.error.messageString $context.integration.error
-
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            JwtConfiguration:
+              audience:
+                - !Ref UserPoolClient
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+            IdentitySource: $request.header.Authorization
+          
   BalancesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -42,6 +58,8 @@ Resources:
             ApiId: !Ref DataApi
             Path: /
             Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
 
 
   ApplicationResourceGroup:
@@ -65,8 +83,39 @@ Resources:
       AutoConfigurationEnabled: 'true'
     DependsOn: ApplicationResourceGroup
 
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref CognitoUserPoolName
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      UsernameAttributes:
+        - email
+      Schema:
+        - AttributeDataType: String
+          Name: email
+          Required: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${AWS::StackName}-user-pool-client'
+      UserPoolId: !Ref UserPool
+      ExplicitAuthFlows:
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH # See also: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cognito-userpoolclient.html
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
 
 Outputs:
   ApiUrl:
     Description: URL for application
     Value: !Sub 'https://${DataApi}.execute-api.${AWS::Region}.amazonaws.com/'
+  UserPool:
+    Description: Cognito User Pool Id
+    Value: !Ref UserPool
+  UserPoolClient:
+    Description: Cognito User Pool Client
+    Value: !Ref UserPoolClient
+    
