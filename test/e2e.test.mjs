@@ -90,7 +90,7 @@ afterAll(() => {
 
 describe('registered user', () => { 
   let token
-  it('should be able to get a jwt token from cognito', async () => { 
+  it('gets a jwt token from cognito', async () => { 
 
       let r = await axios.post('https://cognito-idp.us-east-2.amazonaws.com/', {
         "AuthFlow": "USER_PASSWORD_AUTH",
@@ -112,7 +112,7 @@ describe('registered user', () => {
 
     });
 
-    it('should fail to call endpoint without token', async () => { 
+    it('fails to call endpoint without token', async () => { 
       try{
         let r = await axios.get(stack.ApiUrl + '/', {
           headers: {
@@ -123,7 +123,7 @@ describe('registered user', () => {
       }
     });
 
-    it('should be able to call endpoint with token', async () => { 
+    it('able to call endpoint with token', async () => { 
       let r = await axios.get(stack.ApiUrl + '/', {
         headers: {
           'Authorization': token
