@@ -200,8 +200,8 @@ describe('anonymous user', () => {
     try{
       let r = await axios.post(stack.ApiUrl + '/transfer', {
         amount: 10,
-        source_account: 'payroll',
-        destination_account: 'savings',
+        source_account_name: 'payroll',
+        destination_account_name: 'savings',
         partner: 'test_user2@test.com'
       })
     }catch(e){
@@ -213,38 +213,104 @@ describe('anonymous user', () => {
 
 describe('registered user', () => { 
   let token
+  let clients = []
+
   it('gets a jwt token from cognito', async () => { 
 
-      let r = await axios.post('https://cognito-idp.us-east-2.amazonaws.com/', {
-        "AuthFlow": "USER_PASSWORD_AUTH",
-        "ClientId": "5lui55u51lglkg53n82ehlsv2u",
-        "AuthParameters": {
-          "USERNAME": USERS[0].username,
-          "PASSWORD": USERS[0].password
-        }
-      },{
-        headers: {
-          'Content-Type': 'application/x-amz-json-1.1',
-          'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
-        }
-      })
-      expect(r.status).toEqual(200);
-      expect(r.data.AuthenticationResult).toBeDefined();
-      expect(r.data.AuthenticationResult.AccessToken).toBeDefined();
-      token = r.data.AuthenticationResult.AccessToken
-      token = r.data.AuthenticationResult.IdToken
+      for (let user of USERS){
+        let r = await axios.post('https://cognito-idp.us-east-2.amazonaws.com/', {
+          "AuthFlow": "USER_PASSWORD_AUTH",
+          "ClientId": "5lui55u51lglkg53n82ehlsv2u",
+          "AuthParameters": {
+            "USERNAME": user.username,
+            "PASSWORD": user.password
+          }
+        },{
+          headers: {
+            'Content-Type': 'application/x-amz-json-1.1',
+            'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
+          }
+        })
+        expect(r.status).toEqual(200);
+        expect(r.data.AuthenticationResult).toBeDefined();
+        expect(r.data.AuthenticationResult.AccessToken).toBeDefined();
+        token = r.data.AuthenticationResult.AccessToken
+        token = r.data.AuthenticationResult.IdToken
+        let client = axios.create({
+          headers: {
+            'Authorization': token
+          }
+        })
+        clients.push(client)
+      }
+
 
     });
 
     it('retrieves initial payroll balance', async () => { 
-      let r = await axios.get(stack.ApiUrl + '/balance/payroll', {
-        headers: {
-          'Authorization': token
-        }
-      })
+      let r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
       expect(r.status).toEqual(200);
       expect(r.data.name).toEqual('payroll');
       expect(r.data.balance).toEqual(100);
+    });
+
+    
+    it('transfers 1 dollar from payroll to savings', async () => { 
+    
+      let payload = {
+        amount: 1,
+        source_account_name: 'payroll',
+        destination_account_name: 'savings',
+        partner: 'test_user@test.com'
+      }
+
+      let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
+      console.log(r.data)
+      expect(r.status).toEqual(200);
+
+      r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('payroll');
+      expect(r.data.balance).toEqual(99);
+
+      r = await clients[0].get(stack.ApiUrl + '/balance/savings')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('savings');
+      expect(r.data.balance).toEqual(101);
+
+    });
+
+    it('transfers 1 dollar from payroll to savings 20 times concurrently', async () => { 
+    
+      let payload = {
+        amount: 1,
+        source_account_name: 'payroll',
+        destination_account_name: 'opex',
+        partner: 'test_user@test.com'
+      }
+
+      // Array(20).fill().map(async () => {
+      //   let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
+      //   expect(r.status).toEqual(200);
+      // })
+
+      let concurrency = 20
+      let r = await Promise.all(Array(concurrency).fill().map(() => {
+        return clients[0].post(stack.ApiUrl + '/transfer', payload)
+      }))
+      // console.log(r.data)
+      // expect(r.status).toEqual(200);
+
+      r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('payroll');
+      expect(r.data.balance).toEqual(99-concurrency);
+
+      r = await clients[0].get(stack.ApiUrl + '/balance/savings')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('opex');
+      expect(r.data.balance).toEqual(101+concurrency);
+
     });
 
     
