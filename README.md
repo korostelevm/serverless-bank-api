@@ -48,7 +48,25 @@ With single table design, multiple item types are stored in the same table and a
 LSI and GSI and indexes and associated attributes are reserved but not used for this project.
 
 ### Authentication
+A cognito user pool is used for authorizing users via API Gateway authorizer. 
+It is possible to authenticate using via `AWSCognitoIdentityProviderService.InitiateAuth` API with a username/password `USER_PASSWORD_AUTH` `AuthFlow` given the Cognito client. 
 
+#### Example
+```js
+axios.post(`https://cognito-idp.${process.env.AWS_REGION || "us-east-2"}.amazonaws.com/`, {
+    "AuthFlow": "USER_PASSWORD_AUTH",
+    "ClientId": stack.UserPoolClient,
+    "AuthParameters": {
+    "USERNAME": user.username,
+    "PASSWORD": user.password
+    }
+},{
+    headers: {
+    'Content-Type': 'application/x-amz-json-1.1',
+    'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth'
+    }
+})
+```        
 
 ### POST /transfer
 

@@ -224,7 +224,7 @@ describe('registered user', () => {
   it('gets a jwt token from cognito', async () => { 
 
       for (let user of USERS){
-        let r = await axios.post('https://cognito-idp.us-east-2.amazonaws.com/', {
+        let r = await axios.post(`https://cognito-idp.${process.env.AWS_REGION || "us-east-2"}.amazonaws.com/`, {
           "AuthFlow": "USER_PASSWORD_AUTH",
           "ClientId": stack.UserPoolClient,
           "AuthParameters": {
