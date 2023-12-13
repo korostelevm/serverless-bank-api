@@ -83,11 +83,10 @@ const reset_accounts = async () => {
     let init_accounts = ACCOUNTS.map(async (account) => {
 
       let account_record = {
-        pk: account.id,
+        pk: `account#${account.id}`,
         sk: account.id,
         name: account.name,
         balance: account.balance,
-        last_modified: new Date().toISOString()
       }
 
       await docClient.send(new PutCommand({
@@ -97,7 +96,7 @@ const reset_accounts = async () => {
       
       let partner_records = account.partners.map(async (partner) => {
         let partner_record = {
-            pk: partner,
+            pk: `user#${partner}`,
             sk: account.id,
             account_id: account.id,
             account_name: account.name,

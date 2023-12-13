@@ -16,7 +16,7 @@ const do_transfer = async ({source_account, destination_account, amount}, idempo
                     ConditionExpression: "balance >= :amount",
                     TableName: process.env.DB,
                     Key: {
-                        pk: source_account.account_id,
+                        pk: `account#${source_account.account_id}`,
                         sk: source_account.account_id
                     },
                     UpdateExpression: "set balance = balance - :amount",
@@ -29,7 +29,7 @@ const do_transfer = async ({source_account, destination_account, amount}, idempo
                 Update: {
                     TableName: process.env.DB,
                     Key: {
-                        pk: destination_account.account_id,
+                        pk: `account#${destination_account.account_id}`,
                         sk: destination_account.account_id
                     },
                     UpdateExpression: "set balance = balance + :amount",
@@ -68,7 +68,7 @@ export const transferHandler = async (event, context) => {
                 KeyConditionExpression: "pk=:pk",
                 FilterExpression: "account_name = :account_name",
                 ExpressionAttributeValues: {
-                    ":pk": `${q.partner}`,
+                    ":pk": `user#${q.partner}`,
                     ":account_name": `${q.account_name}`
                 },
             }
@@ -112,7 +112,7 @@ export const transferHandler = async (event, context) => {
             headers: {
                 "Content-Type": "application/json",
             }
-    
+     
         };
     
         return response;

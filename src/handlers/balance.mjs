@@ -18,7 +18,7 @@ export const balanceHandler = async (event, context) => {
         KeyConditionExpression: "pk=:pk",
         FilterExpression: "account_name = :account_name",
         ExpressionAttributeValues: {
-            ":pk": `${user}`,
+            ":pk": `user#${user}`,
             ":account_name": `${requested_account_name}`
         },
         
@@ -40,7 +40,7 @@ export const balanceHandler = async (event, context) => {
     let account_details = await ddbDocClient.send(new GetCommand({
         TableName: process.env.DB,
         Key: {
-            pk: account.account_id,
+            pk: `account#${account.account_id}`,
             sk: account.account_id
         }
     }))
