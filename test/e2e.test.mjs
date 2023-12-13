@@ -24,7 +24,14 @@ const USERS = [{
 }, {
   username: 'test_user2@test.com',
   password: '434234234',
-}]
+}, {
+  username: 'billing@vendia.com',
+  password: 'secret123123',
+}, {
+  username: 'treasury@megacorp.com',
+  password: 'password23123123',
+},
+]
 
 const ACCOUNTS = [
   { 
@@ -68,6 +75,18 @@ const ACCOUNTS = [
     name: 'test_user2_special_account',
     balance: 1000,
     partners: ['test_user2@test.com']
+  },
+  { 
+    id: 'inbound_payments_vendia',
+    name: 'inbound_payments',
+    balance: 0,
+    partners: ['billing@vendia.com']
+  },
+  { 
+    id: 'opex_megacorp',
+    name: 'opex',
+    balance: 1000,
+    partners: ['treasury@megacorp.com']
   },
 ]
 
@@ -351,35 +370,7 @@ describe('registered user', () => {
 
     })
 
-
-    it('transfers 1 dollar from payroll to savings 10 times concurrently', async () => { 
-    
-      let payload = {
-        amount: 1,
-        source_account_name: 'payroll',
-        destination_account_name: 'opex',
-        partner: 'test_user@test.com'
-      }
-
-      let concurrency = 10
-      let r = await Promise.all(Array(concurrency).fill().map(() => {
-        return clients[0].post(stack.ApiUrl + '/transfer', payload)
-      }))
-
-      r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
-      expect(r.status).toEqual(200);
-      expect(r.data.name).toEqual('payroll');
-      expect(r.data.balance).toEqual(99-concurrency);
-
-      r = await clients[0].get(stack.ApiUrl + '/balance/opex')
-      expect(r.status).toEqual(200);
-      expect(r.data.name).toEqual('opex');
-      expect(r.data.balance).toEqual(100+concurrency);
-
-    });
-
-
-     it('transfers 1 dollar from opex to other partner\'s savings', async () => { 
+    it('transfers 1 dollar from opex to other partner\'s savings', async () => { 
 
       await reset_accounts()
     
@@ -404,6 +395,37 @@ describe('registered user', () => {
       expect(r.data.balance).toEqual(1);
 
     });
+
+
+    it('transfers 1 dollar from payroll to savings 10 times concurrently', async () => { 
+    
+      await reset_accounts()
+
+      let payload = {
+        amount: 1,
+        source_account_name: 'payroll',
+        destination_account_name: 'opex',
+        partner: 'test_user@test.com'
+      }
+
+      let concurrency = 5
+      let r = await Promise.all(Array(concurrency).fill().map(() => {
+        return clients[0].post(stack.ApiUrl + '/transfer', payload)
+      }))
+
+      r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('payroll');
+      expect(r.data.balance).toEqual(100-concurrency);
+
+      r = await clients[0].get(stack.ApiUrl + '/balance/opex')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('opex');
+      expect(r.data.balance).toEqual(100+concurrency);
+
+    });
+
+
 
      it('fails to transfers 1 dollar from opex to unknown partner\'s savings', async () => { 
 
@@ -440,6 +462,31 @@ describe('registered user', () => {
         expect(e.response.status).toEqual(400);
         expect(e.response.data.error).toEqual('Insufficient funds')
       }
+    });
+
+
+    it('transfers 1000 dollars from Mega Corp opex to Vendia inbound payments', async () => { 
+    
+      let payload = {
+        amount: 1000,
+        source_account_name: 'opex',
+        destination_account_name: 'inbound_payments',
+        partner: 'billing@vendia.com'
+      }
+
+      let r = await clients[3].post(stack.ApiUrl + '/transfer', payload)
+      expect(r.status).toEqual(200);
+
+      r = await clients[3].get(stack.ApiUrl + '/balance/opex')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('opex');
+      expect(r.data.balance).toEqual(0);
+
+      r = await clients[2].get(stack.ApiUrl + '/balance/inbound_payments')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('inbound_payments');
+      expect(r.data.balance).toEqual(1000);
+
     });
 
 

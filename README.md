@@ -44,9 +44,9 @@ To use the application, users need to authenticate and then they can perform ope
 This project uses a single table DynamoDB schema to store all its data. Both the BalanceFunction and TransfersFunction are given CRUD (Create, Read, Update, Delete) permissions to the same DynamoDB table, referred to as DB in the `template.yaml`.
 
 With single table design, multiple item types are stored in the same table and are distinguished by their key schema.
-- `account#` - balance and metadata
-- `user#` - a user's relationship to accounts
-- transfers - `withdrawal#` and `deposit#` records for each transfer
+- `account#{account id}` - balance and metadata
+- `user#{user id}` - a user's relationship to accounts
+- `withdrawal#{transaction id}` and `deposit#{transaction id}` records for each transfer
 
 LSI and GSI and indexes and associated attributes are reserved but not used for this project.
 
@@ -123,16 +123,17 @@ An end to end test to verify api functions is specified in `test/e2e.test.mjs`.
 
 
 #### anonymous user
-- ✓ fails to call balance endpoint without token 
-- ✓ fails to call transfers endpoint without token 
+  - ✓ fails to call balance endpoint without token 
+  - ✓ fails to call transfers endpoint without token 
 
 #### registered user
-- ✓ gets a jwt token from cognito
-- ✓ retrieves initial payroll balance 
-- ✓ fails to transfers 1 dollar from other user's special account 
-- ✓ transfers 1 dollar from payroll to savings
--  ✓ verifies that transfers are logged in dynamodb for the accounts in previous test
-- ✓ transfers 1 dollar from payroll to savings 10 times concurrently 
-- ✓ transfers 1 dollar from opex to other partner's savings
-- ✓ fails to transfers 1 dollar from opex to unknown partner's savings
-- ✓ fails to transfers 1,000,000 dollars from opex to other partner's savings
+  - ✓ gets a jwt token from cognito 
+  - ✓ retrieves initial payroll balance
+  - ✓ fails to transfers 1 dollar from other user's special account 
+  - ✓ transfers 1 dollar from payroll to savings
+  - ✓ verifies that transfers are logged in dynamodb for the accounts in previous test
+  - ✓ transfers 1 dollar from opex to other partner's savings
+  - ✓ transfers 1 dollar from payroll to savings 10 times concurrently 
+  - ✓ fails to transfers 1 dollar from opex to unknown partner's savings
+  - ✓ fails to transfers 1,000,000 dollars from opex to other partner's savings
+  - ✓ transfers 1000 dollars from Mega Corp opex to Vendia inbound payments 
