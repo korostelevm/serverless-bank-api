@@ -289,11 +289,6 @@ describe('registered user', () => {
         partner: 'test_user@test.com'
       }
 
-      // Array(20).fill().map(async () => {
-      //   let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
-      //   expect(r.status).toEqual(200);
-      // })
-
       let concurrency = 10
       let r = await Promise.all(Array(concurrency).fill().map(() => {
         return clients[0].post(stack.ApiUrl + '/transfer', payload)
@@ -305,6 +300,33 @@ describe('registered user', () => {
       expect(r.data.balance).toEqual(99-concurrency);
 
       r = await clients[0].get(stack.ApiUrl + '/balance/opex')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('opex');
+      expect(r.data.balance).toEqual(100+concurrency);
+
+    });
+
+
+    it('transfers 20 dollar from opex to other user\'s savings 3 times concurrently', async () => { 
+    
+      let payload = {
+        amount: 20,
+        source_account_name: 'payroll',
+        destination_account_name: 'opex',
+        partner: 'test_user2@test.com'
+      }
+
+      let concurrency = 3
+      let r = await Promise.all(Array(concurrency).fill().map(() => {
+        return clients[0].post(stack.ApiUrl + '/transfer', payload)
+      }))
+
+      r = await clients[1].get(stack.ApiUrl + '/balance/payroll')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('payroll');
+      expect(r.data.balance).toEqual(99-concurrency);
+
+      r = await clients[1].get(stack.ApiUrl + '/balance/opex')
       expect(r.status).toEqual(200);
       expect(r.data.name).toEqual('opex');
       expect(r.data.balance).toEqual(100+concurrency);
