@@ -35,8 +35,9 @@ install:
 	npm install
 
 ## Run end to end tests
+.PHONY: test
 test: 
-	npm run e2e
+	@npm run e2e
 
 ## Build the application
 build:
