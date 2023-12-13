@@ -61,9 +61,6 @@ export const balanceHandler = async (event, context) => {
         body: JSON.stringify(result),
         headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
         }
 
     };
