@@ -128,6 +128,7 @@ An end to end test to verify api functions is specified in `test/e2e.test.mjs`.
 - ✓ retrieves initial payroll balance 
 - ✓ fails to transfers 1 dollar from other user's special account 
 - ✓ transfers 1 dollar from payroll to savings
+-  ✓ verifies that transfers are logged in dynamodb for the accounts in previous test
 - ✓ transfers 1 dollar from payroll to savings 10 times concurrently 
 - ✓ transfers 1 dollar from opex to other partner's savings
 - ✓ fails to transfers 1 dollar from opex to unknown partner's savings

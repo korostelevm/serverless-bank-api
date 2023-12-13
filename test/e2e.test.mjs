@@ -2,7 +2,7 @@ import { CloudFormationClient, DescribeStacksCommand } from "@aws-sdk/client-clo
 import { AdminCreateUserCommand, AdminDeleteUserCommand,  AdminSetUserPasswordCommand,  CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
@@ -118,6 +118,25 @@ const reset_accounts = async () => {
 
 }
 
+const wipe_data = async () => {
+  // wipe data from dynamodb
+  let res = await docClient.send(new ScanCommand({
+    TableName: stack.DB,
+  }))
+  let items = res.Items
+  let delete_items = items.map(async (item) => {
+    await docClient.send(new DeleteCommand({
+      TableName: stack.DB,
+      Key: {
+        pk: item.pk,
+        sk: item.sk
+      }
+    }))
+  })
+  await Promise.all(delete_items)
+}
+
+
 
 
 beforeAll(async () => {
@@ -188,6 +207,7 @@ afterAll(async () => {
 
   // reset account balances
   await reset_accounts()
+  await wipe_data()
 
 });
 
@@ -301,6 +321,36 @@ describe('registered user', () => {
       expect(r.data.balance).toEqual(101);
 
     });
+
+    it('verifies that transfers are logged in dynamodb for the accounts in previous test', async () => {
+        
+
+      let withdrawals = await docClient.send(new QueryCommand({
+        TableName: stack.DB,
+        KeyConditionExpression: "pk=:pk",
+        ExpressionAttributeValues: {
+            ":pk": `withdrawal#payroll1`,
+        },
+    }))
+      
+      expect(withdrawals.Items.length).toEqual(1)
+      expect(withdrawals.Items[0].destination_account_id).toEqual('savings1')
+
+
+      let deposits = await docClient.send(new QueryCommand({
+        TableName: stack.DB,
+        KeyConditionExpression: "pk=:pk",
+        ExpressionAttributeValues: {
+            ":pk": `withdrawal#payroll1`,
+        },
+    }))
+      
+      expect(deposits.Items.length).toEqual(1)
+      expect(deposits.Items[0].source_account_id).toEqual('payroll1')
+
+
+    })
+
 
     it('transfers 1 dollar from payroll to savings 10 times concurrently', async () => { 
     

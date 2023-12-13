@@ -7,7 +7,7 @@ const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
 
 const do_transfer = async ({source_account, destination_account, amount}, idempotency_token) => {
-
+    let ts = new Date().toISOString()
     let do_transfer = await ddbDocClient.send(new TransactWriteCommand({
         ClientRequestToken: idempotency_token,
         TransactItems : [
@@ -35,6 +35,32 @@ const do_transfer = async ({source_account, destination_account, amount}, idempo
                     UpdateExpression: "set balance = balance + :amount",
                     ExpressionAttributeValues: {
                         ":amount": amount
+                    }
+                }
+            },
+            {
+                Put: {
+                    TableName: process.env.DB,
+                    Item: {
+                        pk: `withdrawal#${source_account.account_id}`,
+                        sk: `${ts}#${idempotency_token}`,
+                        source_account_id: source_account.account_id,
+                        destination_account_id: destination_account.account_id,
+                        amount: amount,
+                        ts: ts,
+                    }
+                }
+            },
+            {
+                Put: {
+                    TableName: process.env.DB,
+                    Item: {
+                        pk: `deposit#${destination_account.account_id}`,
+                        sk: `${ts}#${idempotency_token}`,
+                        source_account_id: source_account.account_id,
+                        destination_account_id: destination_account.account_id,
+                        amount: amount,
+                        ts: ts,
                     }
                 }
             }
