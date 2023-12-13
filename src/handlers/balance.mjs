@@ -28,7 +28,7 @@ export const balanceHandler = async (event, context) => {
 
     if(!accounts.length){
         return {
-            statusCode: 404,
+            statusCode: 400,
             body: JSON.stringify({
                 error: `Account ${requested_account_name} not found for user ${user}`
             })

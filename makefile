@@ -18,7 +18,7 @@ help:
 
 
 ## Create the base infrastructure for the application
-init:
+init: install
 	sam deploy \
 	--no-fail-on-empty-changeset \
 	--no-confirm-changeset \
@@ -34,22 +34,11 @@ init:
 install: 
 	npm install
 
+## Run end to end tests
 test: 
-	curl -X POST \
-		-H "Content-Type: application/x-amz-json-1.1" \
-		-H "X-Amz-Target: AWSCognitoIdentityProviderService.InitiateAuth" \
-		--data '{ \
-			"AuthFlow": "USER_PASSWORD_AUTH", \
-			"ClientId": "5lui55u51lglkg53n82ehlsv2u", \
-			"AuthParameters": { \
-				"USERNAME": "korostelevm@gmail.com", \
-				"PASSWORD": "4234475a" \
-			}\
-		}' \
-		"https://cognito-idp.us-east-2.amazonaws.com/"
+	npm run e2e
 
-
-
+## Build the application
 build:
 	@sam build \
 		--cached \
@@ -64,6 +53,8 @@ deploy:
 	--capabilities CAPABILITY_IAM \
 	--s3-bucket ${app_bucket} 
 
-sync:
+
+## Run with sam sync and watch changes
+dev:
 	sam sync \
-	--stack-name ${app_name} 
+	--stack-name ${app_name} --watch

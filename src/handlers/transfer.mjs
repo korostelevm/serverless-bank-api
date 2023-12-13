@@ -1,18 +1,15 @@
-// Create clients and set shared const values outside of the handler.
-
 // Create a DocumentClient that represents the query to add an item
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, QueryCommand, GetCommand,
-    TransactWriteCommand,
-    UpdateCommand
- } from '@aws-sdk/lib-dynamodb';
- import { with_backoff } from './utils.mjs';
+import { DynamoDBDocumentClient, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { with_backoff } from './utils.mjs';
+
 const client = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(client);
 
-const do_transfer = async (source_account, destination_account, amount) => {
-    let result = null
+const do_transfer = async ({source_account, destination_account, amount}, idempotency_token) => {
+
     let do_transfer = await ddbDocClient.send(new TransactWriteCommand({
+        ClientRequestToken: idempotency_token,
         TransactItems : [
             {
                 Update: {
@@ -45,14 +42,15 @@ const do_transfer = async (source_account, destination_account, amount) => {
         
         
     }))
-    return result
+    
+    return do_transfer
 }
 
 
 export const transferHandler = async (event, context) => {
 
     console.log(JSON.stringify({event, context},null,2))
-
+    const idempotency_token = context.awsRequestId
 
     const user = event.requestContext.authorizer.claims['custom:username']
     const {source_account_name, destination_account_name, amount, partner} = JSON.parse(event.body)
@@ -87,8 +85,7 @@ export const transferHandler = async (event, context) => {
         return {
             statusCode: 400,
             body: JSON.stringify({
-                accounts,
-                error
+                error: accounts,
             })
         }
     }
@@ -98,9 +95,23 @@ export const transferHandler = async (event, context) => {
     let source_account = accounts[0]
     let destination_account = accounts[1]
 
-    let result
     try{
-        await with_backoff(() => do_transfer(source_account, destination_account, amount))
+
+        await with_backoff(() => do_transfer({source_account, destination_account, amount},idempotency_token), 10, 'TransactionCanceledException')
+
+        const response = {
+            statusCode: 200,
+            body: JSON.stringify({
+                error
+            }),
+            headers: {
+                "Content-Type": "application/json",
+            }
+    
+        };
+    
+        return response;
+
     }catch(e){
         if(e.code == 'TransactionCanceledException'){
             return {
@@ -118,18 +129,4 @@ export const transferHandler = async (event, context) => {
         }
     }
 
-
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify({
-            result,
-            error
-        }),
-        headers: {
-            "Content-Type": "application/json",
-        }
-
-    };
-
-    return response;
 }

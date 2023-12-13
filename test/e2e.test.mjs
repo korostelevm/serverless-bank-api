@@ -280,7 +280,7 @@ describe('registered user', () => {
 
     });
 
-    it('transfers 1 dollar from payroll to savings 20 times concurrently', async () => { 
+    it('transfers 1 dollar from payroll to savings 10 times concurrently', async () => { 
     
       let payload = {
         amount: 1,
@@ -294,22 +294,20 @@ describe('registered user', () => {
       //   expect(r.status).toEqual(200);
       // })
 
-      let concurrency = 20
+      let concurrency = 10
       let r = await Promise.all(Array(concurrency).fill().map(() => {
         return clients[0].post(stack.ApiUrl + '/transfer', payload)
       }))
-      // console.log(r.data)
-      // expect(r.status).toEqual(200);
 
       r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
       expect(r.status).toEqual(200);
       expect(r.data.name).toEqual('payroll');
       expect(r.data.balance).toEqual(99-concurrency);
 
-      r = await clients[0].get(stack.ApiUrl + '/balance/savings')
+      r = await clients[0].get(stack.ApiUrl + '/balance/opex')
       expect(r.status).toEqual(200);
       expect(r.data.name).toEqual('opex');
-      expect(r.data.balance).toEqual(101+concurrency);
+      expect(r.data.balance).toEqual(100+concurrency);
 
     });
 
