@@ -49,7 +49,10 @@ const do_transfer = async ({source_account, destination_account, amount}, idempo
 
 export const transferHandler = async (event, context) => {
 
-    console.log(JSON.stringify({event, context},null,2))
+    // console.log(JSON.stringify({event, context},null,2))
+    
+
+    // use the request id as the idempotency token, in case aws lambda retries the request for some reason
     const idempotency_token = context.awsRequestId
 
     const user = event.requestContext.authorizer.claims['custom:username']
@@ -81,23 +84,25 @@ export const transferHandler = async (event, context) => {
     })
     let accounts = await Promise.all(accounts_queries)
     
+    // if an account isnt found, return an error
     if(error){
         return {
             statusCode: 400,
             body: JSON.stringify({
-                error: accounts,
+                error,
             })
         }
     }
 
     
-    // transfer funds
+    // do transfer funds
     let source_account = accounts[0]
     let destination_account = accounts[1]
 
     try{
 
-        await with_backoff(() => do_transfer({source_account, destination_account, amount},idempotency_token), 10, 'TransactionCanceledException')
+        // retry the transfer up to 5 times if it fails due to a TransactionConflict
+        await with_backoff(() => do_transfer({source_account, destination_account, amount}, idempotency_token), 5, 'TransactionConflict')
 
         const response = {
             statusCode: 200,
@@ -113,7 +118,7 @@ export const transferHandler = async (event, context) => {
         return response;
 
     }catch(e){
-        if(e.code == 'TransactionCanceledException'){
+        if(e.toString().includes('TransactionConflict')){
             return {
                 statusCode: 423,
                 body: JSON.stringify({
@@ -121,6 +126,16 @@ export const transferHandler = async (event, context) => {
                 })
             }
         }
+
+        if(e.toString().includes('ConditionalCheckFailed')){
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: `Insufficient funds`
+                })
+            }
+        }
+
         return {
             statusCode: 500,
             body: JSON.stringify({

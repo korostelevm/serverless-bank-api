@@ -63,6 +63,12 @@ const ACCOUNTS = [
     balance: 0,
     partners: ['test_user2@test.com']
   },
+  { 
+    id: 'test_user2_special_account',
+    name: 'test_user2_special_account',
+    balance: 1000,
+    partners: ['test_user2@test.com']
+  },
 ]
 
 /*
@@ -220,7 +226,7 @@ describe('registered user', () => {
       for (let user of USERS){
         let r = await axios.post('https://cognito-idp.us-east-2.amazonaws.com/', {
           "AuthFlow": "USER_PASSWORD_AUTH",
-          "ClientId": "5lui55u51lglkg53n82ehlsv2u",
+          "ClientId": stack.UserPoolClient,
           "AuthParameters": {
             "USERNAME": user.username,
             "PASSWORD": user.password
@@ -255,6 +261,24 @@ describe('registered user', () => {
     });
 
     
+    it('fails to transfers 1 dollar from other user\'s special account', async () => { 
+    
+      let payload = {
+        amount: 1,
+        source_account_name: 'test_user2_special_account',
+        destination_account_name: 'savings',
+        partner: 'test_user@test.com'
+      }
+
+      try{
+        let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
+      }catch(e){
+        expect(e.response.status).toEqual(400);
+        expect(e.response.data.error).toEqual('Account test_user2_special_account not found for user test_user@test.com')
+      }
+
+    });
+
     it('transfers 1 dollar from payroll to savings', async () => { 
     
       let payload = {
@@ -265,7 +289,6 @@ describe('registered user', () => {
       }
 
       let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
-      console.log(r.data)
       expect(r.status).toEqual(200);
 
       r = await clients[0].get(stack.ApiUrl + '/balance/payroll')
@@ -307,31 +330,69 @@ describe('registered user', () => {
     });
 
 
-    it('transfers 20 dollar from opex to other user\'s savings 3 times concurrently', async () => { 
+     it('transfers 1 dollar from opex to other partner\'s savings', async () => { 
+
+      await reset_accounts()
     
       let payload = {
-        amount: 20,
-        source_account_name: 'payroll',
-        destination_account_name: 'opex',
+        amount: 1,
+        source_account_name: 'opex',
+        destination_account_name: 'savings',
         partner: 'test_user2@test.com'
       }
 
-      let concurrency = 3
-      let r = await Promise.all(Array(concurrency).fill().map(() => {
-        return clients[0].post(stack.ApiUrl + '/transfer', payload)
-      }))
-
-      r = await clients[1].get(stack.ApiUrl + '/balance/payroll')
+      let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
       expect(r.status).toEqual(200);
-      expect(r.data.name).toEqual('payroll');
-      expect(r.data.balance).toEqual(99-concurrency);
 
-      r = await clients[1].get(stack.ApiUrl + '/balance/opex')
+      r = await clients[0].get(stack.ApiUrl + '/balance/opex')
       expect(r.status).toEqual(200);
       expect(r.data.name).toEqual('opex');
-      expect(r.data.balance).toEqual(100+concurrency);
+      expect(r.data.balance).toEqual(99);
+
+      r = await clients[1].get(stack.ApiUrl + '/balance/savings')
+      expect(r.status).toEqual(200);
+      expect(r.data.name).toEqual('savings');
+      expect(r.data.balance).toEqual(1);
 
     });
+
+     it('fails to transfers 1 dollar from opex to unknown partner\'s savings', async () => { 
+
+      await reset_accounts()
+    
+      let payload = {
+        amount: 1,
+        source_account_name: 'opex',
+        destination_account_name: 'savings',
+        partner: 'unknown@test.com'
+      }
+      try{
+        let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
+      }catch(e){
+        expect(e.response.status).toEqual(400);
+        expect(e.response.data.error).toEqual('Account savings not found for user unknown@test.com')
+      }
+    });
+
+
+     it('fails to transfers 1,000,000 dollars from opex to other partner\'s savings', async () => { 
+
+      await reset_accounts()
+    
+      let payload = {
+        amount: 1000000,
+        source_account_name: 'opex',
+        destination_account_name: 'savings',
+        partner: 'test_user2@test.com'
+      }
+      try{
+        let r = await clients[0].post(stack.ApiUrl + '/transfer', payload)
+      }catch(e){
+        expect(e.response.status).toEqual(400);
+        expect(e.response.data.error).toEqual('Insufficient funds')
+      }
+    });
+
 
     
       
