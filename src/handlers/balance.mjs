@@ -52,7 +52,6 @@ export const balanceHandler = async (event, context) => {
         partner: user,
         name: account.name,
         balance: account.balance,
-        last_modified: account.last_modified
     }
 
 

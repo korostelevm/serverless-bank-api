@@ -44,6 +44,9 @@ To use the application, users need to authenticate and then they can perform ope
 This project uses a single table DynamoDB schema to store all its data. Both the BalanceFunction and TransfersFunction are given CRUD (Create, Read, Update, Delete) permissions to the same DynamoDB table, referred to as DB in the `template.yaml`.
 
 With single table design, multiple item types are stored in the same table and are distinguished by their key schema.
+- `account#` - balance and metadata
+- `user#` - a user's relationship to accounts
+- transfers - `withdrawal#` and `deposit#` records for each transfer
 
 LSI and GSI and indexes and associated attributes are reserved but not used for this project.
 

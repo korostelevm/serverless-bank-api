@@ -44,6 +44,7 @@ const do_transfer = async ({source_account, destination_account, amount}, idempo
                     Item: {
                         pk: `withdrawal#${source_account.account_id}`,
                         sk: `${ts}#${idempotency_token}`,
+                        transaction_id: `${idempotency_token}`,
                         source_account_id: source_account.account_id,
                         destination_account_id: destination_account.account_id,
                         amount: amount,
@@ -57,6 +58,7 @@ const do_transfer = async ({source_account, destination_account, amount}, idempo
                     Item: {
                         pk: `deposit#${destination_account.account_id}`,
                         sk: `${ts}#${idempotency_token}`,
+                        transaction_id: `${idempotency_token}`,
                         source_account_id: source_account.account_id,
                         destination_account_id: destination_account.account_id,
                         amount: amount,
