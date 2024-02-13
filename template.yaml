@@ -11,7 +11,7 @@ Parameters:
   CognitoUserPoolName:
     Type: String
     Description: The name of the Cognito User Pool to create
-    Default: vendia-bank-user-pool
+    Default: serverless-bank-user-pool
 
 
 Resources:
