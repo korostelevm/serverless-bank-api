@@ -1,4 +1,4 @@
-# vendia-bank
+# serverless-bank
 
 This application allows users to manage and transfer funds between different accounts. It supports operations such as retrieving account balances and transferring funds between accounts.
 
