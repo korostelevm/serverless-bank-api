@@ -21,7 +21,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      TableName: VendiaDB
+      TableName: BankDB
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
